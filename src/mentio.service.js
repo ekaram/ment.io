@@ -1,7 +1,7 @@
 'use strict';
 
 angular.module('mentio')
-    .factory('mentioUtil', function ($window, $location, $anchorScroll, $timeout) {
+    .factory('mentioUtil', ["$window", "$location", "$anchorScroll", "$timeout", function ($window, $location, $anchorScroll, $timeout) {
 
         // public
         function popUnderMention (ctx, triggerCharSet, selectionEl, requireLeadingSpace) {
@@ -14,7 +14,7 @@ angular.module('mentio')
                     coordinates = getTextAreaOrInputUnderlinePosition(ctx, getDocument(ctx).activeElement,
                         mentionInfo.mentionPosition);
                 } else {
-                    coordinates = getContentEditableCaretPosition(ctx, mentionInfo.mentionPosition);
+                    coordinates = getContentEditableCaretPosition(ctx, mentionInfo.mentionPosition, selectionEl);
                 }
 
                 // Move the button into place.
@@ -22,7 +22,7 @@ angular.module('mentio')
                     top: coordinates.top + 'px',
                     left: coordinates.left + 'px',
                     position: 'absolute',
-                    zIndex: 10000,
+                    zIndex: 100,
                     display: 'block'
                 });
 
@@ -174,7 +174,7 @@ angular.module('mentio')
         }
 
         // public
-        function replaceTriggerText (ctx, targetElement, path, offset, triggerCharSet, 
+        function replaceTriggerText (ctx, targetElement, path, offset, triggerCharSet,
                 text, requireLeadingSpace, hasTrailingSpace) {
             resetSelection(ctx, targetElement, path, offset);
 
@@ -297,7 +297,7 @@ angular.module('mentio')
         // public
         function getTriggerInfo (ctx, triggerCharSet, requireLeadingSpace, menuAlreadyActive, hasTrailingSpace) {
             /*jshint maxcomplexity:11 */
-            // yes this function needs refactoring 
+            // yes this function needs refactoring
             var selected, path, offset;
             if (selectedElementIsTextAreaOrInput(ctx)) {
                 selected = getDocument(ctx).activeElement;
@@ -398,7 +398,7 @@ angular.module('mentio')
             return text;
         }
 
-        function getContentEditableCaretPosition (ctx, selectedNodePosition) {
+        function getContentEditableCaretPosition (ctx, selectedNodePosition, selectionEl) {
             var markerTextChar = '\ufeff';
             var markerEl, markerId = 'sel_' + new Date().getTime() + '_' + Math.random().toString().substr(2);
 
@@ -425,7 +425,12 @@ angular.module('mentio')
                 top: markerEl.offsetHeight
             };
 
-            localToGlobalCoordinates(ctx, markerEl, coordinates);
+            if (selectionEl[0].parentNode === document.body) {
+                localToGlobalCoordinates(ctx, markerEl, coordinates);
+            } else {
+                coordinates.left += markerEl.offsetLeft;
+                coordinates.top += markerEl.offsetTop;
+            }
 
             markerEl.parentNode.removeChild(markerEl);
             return coordinates;
@@ -435,30 +440,19 @@ angular.module('mentio')
             var obj = element;
             var iframe = ctx ? ctx.iframe : null;
             while(obj) {
-                coordinates.left += obj.offsetLeft + obj.clientLeft;
-                coordinates.top += obj.offsetTop + obj.clientTop;
+                coordinates.left += obj.offsetLeft;
+                coordinates.top += obj.offsetTop;
+                if (obj !== getDocument().body) {
+                    coordinates.top -= obj.scrollTop;
+                    coordinates.left -= obj.scrollLeft;
+                }
                 obj = obj.offsetParent;
                 if (!obj && iframe) {
                     obj = iframe;
                     iframe = null;
                 }
-            }            
-            obj = element;
-            iframe = ctx ? ctx.iframe : null;
-            while(obj !== getDocument().body) {
-                if (obj.scrollTop && obj.scrollTop > 0) {
-                    coordinates.top -= obj.scrollTop;
-                }
-                if (obj.scrollLeft && obj.scrollLeft > 0) {
-                    coordinates.left -= obj.scrollLeft;
-                }
-                obj = obj.parentNode;
-                if (!obj && iframe) {
-                    obj = iframe;
-                    iframe = null;
-                }
-            }            
-         }
+            }
+        }
 
         function getTextAreaOrInputUnderlinePosition (ctx, element, position) {
             var properties = [
@@ -567,4 +561,4 @@ angular.module('mentio')
             resetSelection: resetSelection,
             scrollIntoView: scrollIntoView
         };
-    });
+    }]);

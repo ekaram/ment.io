@@ -255,8 +255,9 @@ angular.module('mentio', [])
                     var itemsRef = attrs.mentioSearch ? ' mentio-items="items"' : ' mentio-items="localItems"';
 
                     scope.defaultTriggerChar = attrs.mentioTriggerChar ? scope.$eval(attrs.mentioTriggerChar) : '@';
-
+                    var mentioApplyElement = (attrs.mentioApplyElement?' mentio-apply-element="' + attrs.mentioApplyElement + '"':'');
                     var html = '<mentio-menu' +
+                        mentioApplyElement + 
                         ' mentio-search="bridgeSearch(term)"' +
                         ' mentio-select="bridgeSelect(item)"' +
                         itemsRef;
@@ -536,9 +537,12 @@ angular.module('mentio', [])
                 };
             }],
 
-            link: function (scope, element) {
-                element[0].parentNode.removeChild(element[0]);
-                $document[0].body.appendChild(element[0]);
+            link: function (scope, element, attrs) {
+                if (attrs.mentioApplyElement === undefined) {
+                    element[0].parentNode.removeChild(element[0]);
+                    $document[0].body.appendChild(element[0]);
+                }
+
                 scope.menuElement = element; // for testing
 
                 if (scope.parentScope) {
@@ -606,8 +610,7 @@ angular.module('mentio', [])
                 scope.adjustScroll = function (direction) {
                     var menuEl = element[0];
                     var menuItemsList = menuEl.querySelector('ul');
-                    var menuItem = (menuEl.querySelector('[mentio-menu-item].active') || 
-                        menuEl.querySelector('[data-mentio-menu-item].active'));
+                    var menuItem = menuEl.querySelector('[mentio-menu-item].active');
 
                     if (scope.isFirstItemActive()) {
                         return menuItemsList.scrollTop = 0;
@@ -696,7 +699,7 @@ angular.module('mentio')
                     coordinates = getTextAreaOrInputUnderlinePosition(ctx, getDocument(ctx).activeElement,
                         mentionInfo.mentionPosition);
                 } else {
-                    coordinates = getContentEditableCaretPosition(ctx, mentionInfo.mentionPosition);
+                    coordinates = getContentEditableCaretPosition(ctx, mentionInfo.mentionPosition, selectionEl);
                 }
 
                 // Move the button into place.
@@ -704,7 +707,7 @@ angular.module('mentio')
                     top: coordinates.top + 'px',
                     left: coordinates.left + 'px',
                     position: 'absolute',
-                    zIndex: 10000,
+                    zIndex: 100,
                     display: 'block'
                 });
 
@@ -856,7 +859,7 @@ angular.module('mentio')
         }
 
         // public
-        function replaceTriggerText (ctx, targetElement, path, offset, triggerCharSet, 
+        function replaceTriggerText (ctx, targetElement, path, offset, triggerCharSet,
                 text, requireLeadingSpace, hasTrailingSpace) {
             resetSelection(ctx, targetElement, path, offset);
 
@@ -979,7 +982,7 @@ angular.module('mentio')
         // public
         function getTriggerInfo (ctx, triggerCharSet, requireLeadingSpace, menuAlreadyActive, hasTrailingSpace) {
             /*jshint maxcomplexity:11 */
-            // yes this function needs refactoring 
+            // yes this function needs refactoring
             var selected, path, offset;
             if (selectedElementIsTextAreaOrInput(ctx)) {
                 selected = getDocument(ctx).activeElement;
@@ -1080,7 +1083,7 @@ angular.module('mentio')
             return text;
         }
 
-        function getContentEditableCaretPosition (ctx, selectedNodePosition) {
+        function getContentEditableCaretPosition (ctx, selectedNodePosition, selectionEl) {
             var markerTextChar = '\ufeff';
             var markerEl, markerId = 'sel_' + new Date().getTime() + '_' + Math.random().toString().substr(2);
 
@@ -1107,7 +1110,12 @@ angular.module('mentio')
                 top: markerEl.offsetHeight
             };
 
-            localToGlobalCoordinates(ctx, markerEl, coordinates);
+            if (selectionEl[0].parentNode === document.body) {
+                localToGlobalCoordinates(ctx, markerEl, coordinates);
+            } else {
+                coordinates.left += markerEl.offsetLeft;
+                coordinates.top += markerEl.offsetTop;
+            }
 
             markerEl.parentNode.removeChild(markerEl);
             return coordinates;
@@ -1117,30 +1125,19 @@ angular.module('mentio')
             var obj = element;
             var iframe = ctx ? ctx.iframe : null;
             while(obj) {
-                coordinates.left += obj.offsetLeft + obj.clientLeft;
-                coordinates.top += obj.offsetTop + obj.clientTop;
+                coordinates.left += obj.offsetLeft;
+                coordinates.top += obj.offsetTop;
+                if (obj !== getDocument().body) {
+                    coordinates.top -= obj.scrollTop;
+                    coordinates.left -= obj.scrollLeft;
+                }
                 obj = obj.offsetParent;
                 if (!obj && iframe) {
                     obj = iframe;
                     iframe = null;
                 }
-            }            
-            obj = element;
-            iframe = ctx ? ctx.iframe : null;
-            while(obj !== getDocument().body) {
-                if (obj.scrollTop && obj.scrollTop > 0) {
-                    coordinates.top -= obj.scrollTop;
-                }
-                if (obj.scrollLeft && obj.scrollLeft > 0) {
-                    coordinates.left -= obj.scrollLeft;
-                }
-                obj = obj.parentNode;
-                if (!obj && iframe) {
-                    obj = iframe;
-                    iframe = null;
-                }
-            }            
-         }
+            }
+        }
 
         function getTextAreaOrInputUnderlinePosition (ctx, element, position) {
             var properties = [
